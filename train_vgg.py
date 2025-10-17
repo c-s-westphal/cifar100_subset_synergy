@@ -492,7 +492,7 @@ def main():
                         help='Random seed')
 
     # Training arguments
-    parser.add_argument('--epochs', type=int, default=200,
+    parser.add_argument('--epochs', type=int, default=600,
                         help='Maximum number of training epochs')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='Training batch size')
@@ -594,8 +594,10 @@ def main():
         nesterov=True
     )
 
-    # Setup learning rate scheduler: warmup (10 epochs) + cosine annealing
+    # Setup learning rate scheduler: warmup (10) + cosine (290) + constant (300)
     warmup_epochs = 10
+    cosine_epochs = 290
+    constant_epochs = 300
     eta_min = 1e-5
 
     # Warmup scheduler: linear increase from ~0 to args.lr over warmup_epochs
@@ -606,18 +608,25 @@ def main():
         total_iters=warmup_epochs
     )
 
-    # Cosine annealing scheduler: decay from args.lr to 1e-5 over remaining epochs
+    # Cosine annealing scheduler: decay from args.lr to 1e-5 over 290 epochs
     cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        T_max=args.epochs - warmup_epochs,
+        T_max=cosine_epochs,
         eta_min=eta_min
     )
 
-    # Chain the two schedulers
+    # Constant scheduler: stay at 1e-5 for remaining epochs
+    constant_scheduler = optim.lr_scheduler.ConstantLR(
+        optimizer,
+        factor=1.0,
+        total_iters=constant_epochs
+    )
+
+    # Chain the three schedulers
     scheduler = optim.lr_scheduler.SequentialLR(
         optimizer,
-        schedulers=[warmup_scheduler, cosine_scheduler],
-        milestones=[warmup_epochs]
+        schedulers=[warmup_scheduler, cosine_scheduler, constant_scheduler],
+        milestones=[warmup_epochs, warmup_epochs + cosine_epochs]
     )
 
     # Loss function (label smoothing)

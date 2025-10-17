@@ -78,7 +78,7 @@ else
     python3.9 -u train_vgg.py \
         --arch "$arch" \
         --seed $seed \
-        --epochs 200 \
+        --epochs 600 \
         --batch_size 256 \
         --lr 0.2 \
         --weight_decay 3e-4 \
