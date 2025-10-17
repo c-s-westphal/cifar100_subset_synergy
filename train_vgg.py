@@ -504,7 +504,17 @@ def main():
         torch.cuda.manual_seed(args.seed)
 
     # Set device
-    device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
+    if args.device == 'cuda':
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "CUDA requested but not available! "
+                "This job should be rescheduled to a working GPU node. "
+                "If you see this error, the SLURM node has GPU issues."
+            )
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+
     print(f"Using device: {device}")
 
     # Create model (single configuration: BN=yes, Aug=yes, Dropout=yes)
