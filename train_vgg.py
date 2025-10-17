@@ -405,6 +405,34 @@ def evaluate_first_layer_mi(
     return mi_full, mean_mi_masked, mi_difference
 
 
+def separate_parameters_for_weight_decay(model: nn.Module):
+    """Separate parameters into groups for selective weight decay.
+
+    Apply weight decay only to conv/linear weights, not to BatchNorm params or any biases.
+
+    Returns:
+        List of parameter dicts for optimizer
+    """
+    decay_params = []
+    no_decay_params = []
+
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+
+        # No weight decay on biases or BatchNorm parameters
+        if 'bias' in name or 'bn' in name or isinstance(param, nn.BatchNorm2d):
+            no_decay_params.append(param)
+        else:
+            # Apply weight decay to conv/linear weights
+            decay_params.append(param)
+
+    return [
+        {'params': decay_params, 'weight_decay': None},  # Will be set by optimizer
+        {'params': no_decay_params, 'weight_decay': 0.0}
+    ]
+
+
 def train_one_epoch(
     model: nn.Module,
     train_loader: DataLoader,
@@ -412,7 +440,8 @@ def train_one_epoch(
     optimizer: optim.Optimizer,
     device: torch.device,
     epoch: int,
-    cutmix_alpha: float = 1.0
+    cutmix_alpha: float = 1.0,
+    grad_clip: float = 0.0
 ) -> Tuple[float, float]:
     """Train for one epoch with CutMix."""
     model.train()
@@ -433,6 +462,11 @@ def train_one_epoch(
         loss = lam * criterion(outputs, targets_a) + (1 - lam) * criterion(outputs, targets_b)
 
         loss.backward()
+
+        # Gradient clipping
+        if grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
         optimizer.step()
 
         train_loss += loss.item()
@@ -458,16 +492,18 @@ def main():
                         help='Random seed')
 
     # Training arguments
-    parser.add_argument('--epochs', type=int, default=600,
+    parser.add_argument('--epochs', type=int, default=200,
                         help='Maximum number of training epochs')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='Training batch size')
-    parser.add_argument('--lr', type=float, default=0.001,
-                        help='Initial learning rate')
-    parser.add_argument('--weight_decay', type=float, default=5e-4,
-                        help='Weight decay')
+    parser.add_argument('--lr', type=float, default=0.2,
+                        help='Initial learning rate (base LR)')
+    parser.add_argument('--weight_decay', type=float, default=3e-4,
+                        help='Weight decay (applied to conv/linear weights only)')
     parser.add_argument('--target_train_acc', type=float, default=99.0,
                         help='Target clean train accuracy for early stopping')
+    parser.add_argument('--grad_clip', type=float, default=1.0,
+                        help='Gradient clipping max norm (0 to disable)')
 
     # Evaluation arguments
     parser.add_argument('--eval_interval', type=int, default=10,
@@ -529,7 +565,8 @@ def main():
     model = model.to(device)
 
     print(f"\nModel: {args.arch.upper()}")
-    print(f"Configuration: BN=yes, Aug=yes, Dropout=yes, Optimizer=AdamW")
+    print(f"Configuration: BN=yes, Aug=yes, Dropout=yes, Optimizer=SGD+Nesterov")
+    print(f"LR: {args.lr}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Create data loaders
@@ -546,15 +583,41 @@ def main():
         data_root=args.data_dir
     )
 
-    # Setup optimizer (AdamW)
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    # Setup optimizer (SGD with Nesterov momentum and selective weight decay)
+    param_groups = separate_parameters_for_weight_decay(model)
+    param_groups[0]['weight_decay'] = args.weight_decay  # Apply WD to conv/linear weights
 
-    # Setup learning rate scheduler
-    # Simple cosine annealing from initial LR to eta_min over full training
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+    optimizer = optim.SGD(
+        param_groups,
+        lr=args.lr,
+        momentum=0.9,
+        nesterov=True
+    )
+
+    # Setup learning rate scheduler: warmup (10 epochs) + cosine annealing
+    warmup_epochs = 10
+    eta_min = 1e-5
+
+    # Warmup scheduler: linear increase from ~0 to args.lr over warmup_epochs
+    warmup_scheduler = optim.lr_scheduler.LinearLR(
         optimizer,
-        T_max=args.epochs,
-        eta_min=1e-5  # Don't decay to 0, stop at 1e-5
+        start_factor=0.001,  # Start at 0.1% of LR
+        end_factor=1.0,      # Reach full LR
+        total_iters=warmup_epochs
+    )
+
+    # Cosine annealing scheduler: decay from args.lr to 1e-5 over remaining epochs
+    cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=args.epochs - warmup_epochs,
+        eta_min=eta_min
+    )
+
+    # Chain the two schedulers
+    scheduler = optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, cosine_scheduler],
+        milestones=[warmup_epochs]
     )
 
     # Loss function (label smoothing)
@@ -577,7 +640,8 @@ def main():
     for epoch in range(1, args.epochs + 1):
         # Train
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, device, epoch, cutmix_alpha=1.0
+            model, train_loader, criterion, optimizer, device, epoch,
+            cutmix_alpha=1.0, grad_clip=args.grad_clip
         )
 
         # Step scheduler
@@ -655,7 +719,7 @@ def main():
         'use_batchnorm': True,
         'use_augmentation': True,
         'use_dropout': True,
-        'optimizer_name': 'adamw',
+        'optimizer_name': 'sgd_nesterov',
         'train_acc_aug': train_acc_aug_history[-1] if train_acc_aug_history else train_acc,
         'train_acc_clean': train_acc_clean_history[-1] if train_acc_clean_history else train_acc_clean,
         'test_acc': test_acc_history[-1] if test_acc_history else test_acc,
@@ -690,7 +754,7 @@ def main():
         use_batchnorm=True,
         use_augmentation=True,
         use_dropout=True,
-        optimizer='adamw',
+        optimizer='sgd_nesterov',
     )
 
     print(f"Results saved to: {results_path}")
@@ -701,7 +765,7 @@ def main():
         json.dump({
             'arch': args.arch,
             'seed': args.seed,
-            'optimizer': 'adamw',
+            'optimizer': 'sgd_nesterov',
             'use_batchnorm': True,
             'use_augmentation': True,
             'use_dropout': True,

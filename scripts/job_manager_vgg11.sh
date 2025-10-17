@@ -78,10 +78,10 @@ else
     python3.9 -u train_vgg.py \
         --arch "$arch" \
         --seed $seed \
-        --epochs 600 \
+        --epochs 200 \
         --batch_size 256 \
-        --lr 0.001 \
-        --weight_decay 5e-4 \
+        --lr 0.2 \
+        --weight_decay 3e-4 \
         --eval_interval 10 \
         --n_masks_train 20 \
         --n_masks_final 40 \
@@ -90,6 +90,7 @@ else
         --checkpoint_dir checkpoints \
         --results_dir results \
         --data_dir ./data \
+        --grad_clip 1.0 \
         --device cuda
 
     date
