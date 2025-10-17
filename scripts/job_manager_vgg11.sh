@@ -80,8 +80,8 @@ else
         --seed $seed \
         --epochs 600 \
         --batch_size 256 \
-        --lr 0.3 \
-        --weight_decay 1e-5 \
+        --lr 0.15 \
+        --weight_decay 5e-4 \
         --eval_interval 10 \
         --n_masks_train 20 \
         --n_masks_final 40 \

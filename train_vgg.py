@@ -462,9 +462,9 @@ def main():
                         help='Maximum number of training epochs')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='Training batch size')
-    parser.add_argument('--lr', type=float, default=0.3,
+    parser.add_argument('--lr', type=float, default=0.15,
                         help='Initial learning rate')
-    parser.add_argument('--weight_decay', type=float, default=1e-5,
+    parser.add_argument('--weight_decay', type=float, default=5e-4,
                         help='Weight decay')
     parser.add_argument('--target_train_acc', type=float, default=99.0,
                         help='Target clean train accuracy for early stopping')
@@ -540,10 +540,22 @@ def main():
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # Setup learning rate scheduler
-    # Cosine annealing from initial LR (0.3) to 1e-5 over 300 epochs, then constant at 1e-5
+    # Warmup: 10 epochs (0 → 0.15)
+    # Cosine annealing: 0.15 → 1e-5 over 300 epochs
+    # Constant: 1e-5 afterwards
+    warmup_epochs = 10
     cosine_epochs = 300
     eta_min = 1e-5
 
+    # Warmup scheduler: linear increase from ~0 to args.lr over warmup_epochs
+    warmup_scheduler = optim.lr_scheduler.LinearLR(
+        optimizer,
+        start_factor=0.001,  # Start at 0.1% of LR
+        end_factor=1.0,      # Reach full LR
+        total_iters=warmup_epochs
+    )
+
+    # Cosine annealing scheduler
     cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
         T_max=cosine_epochs,
@@ -554,14 +566,14 @@ def main():
     constant_scheduler = optim.lr_scheduler.ConstantLR(
         optimizer,
         factor=1.0,  # Keep LR constant
-        total_iters=args.epochs - cosine_epochs
+        total_iters=args.epochs - warmup_epochs - cosine_epochs
     )
 
     # Chain the schedulers
     scheduler = optim.lr_scheduler.SequentialLR(
         optimizer,
-        schedulers=[cosine_scheduler, constant_scheduler],
-        milestones=[cosine_epochs]
+        schedulers=[warmup_scheduler, cosine_scheduler, constant_scheduler],
+        milestones=[warmup_epochs, warmup_epochs + cosine_epochs]
     )
 
     # Loss function (label smoothing)
