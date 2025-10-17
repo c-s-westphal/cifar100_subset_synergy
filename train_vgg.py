@@ -462,7 +462,7 @@ def main():
                         help='Maximum number of training epochs')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='Training batch size')
-    parser.add_argument('--lr', type=float, default=0.15,
+    parser.add_argument('--lr', type=float, default=0.001,
                         help='Initial learning rate')
     parser.add_argument('--weight_decay', type=float, default=5e-4,
                         help='Weight decay')
@@ -540,40 +540,11 @@ def main():
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # Setup learning rate scheduler
-    # Warmup: 10 epochs (0 → 0.15)
-    # Cosine annealing: 0.15 → 1e-5 over 300 epochs
-    # Constant: 1e-5 afterwards
-    warmup_epochs = 10
-    cosine_epochs = 300
-    eta_min = 1e-5
-
-    # Warmup scheduler: linear increase from ~0 to args.lr over warmup_epochs
-    warmup_scheduler = optim.lr_scheduler.LinearLR(
+    # Simple cosine annealing from initial LR to eta_min over full training
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        start_factor=0.001,  # Start at 0.1% of LR
-        end_factor=1.0,      # Reach full LR
-        total_iters=warmup_epochs
-    )
-
-    # Cosine annealing scheduler
-    cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer,
-        T_max=cosine_epochs,
-        eta_min=eta_min
-    )
-
-    # Constant scheduler after cosine annealing finishes
-    constant_scheduler = optim.lr_scheduler.ConstantLR(
-        optimizer,
-        factor=1.0,  # Keep LR constant
-        total_iters=args.epochs - warmup_epochs - cosine_epochs
-    )
-
-    # Chain the schedulers
-    scheduler = optim.lr_scheduler.SequentialLR(
-        optimizer,
-        schedulers=[warmup_scheduler, cosine_scheduler, constant_scheduler],
-        milestones=[warmup_epochs, warmup_epochs + cosine_epochs]
+        T_max=args.epochs,
+        eta_min=1e-5  # Don't decay to 0, stop at 1e-5
     )
 
     # Loss function (label smoothing)
