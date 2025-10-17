@@ -458,14 +458,16 @@ def main():
                         help='Random seed')
 
     # Training arguments
-    parser.add_argument('--epochs', type=int, default=200,
-                        help='Number of training epochs')
+    parser.add_argument('--epochs', type=int, default=600,
+                        help='Maximum number of training epochs')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='Training batch size')
-    parser.add_argument('--lr', type=float, default=0.001,
+    parser.add_argument('--lr', type=float, default=0.3,
                         help='Initial learning rate')
-    parser.add_argument('--weight_decay', type=float, default=5e-4,
+    parser.add_argument('--weight_decay', type=float, default=1e-5,
                         help='Weight decay')
+    parser.add_argument('--target_train_acc', type=float, default=99.0,
+                        help='Target clean train accuracy for early stopping')
 
     # Evaluation arguments
     parser.add_argument('--eval_interval', type=int, default=10,
@@ -537,8 +539,30 @@ def main():
     # Setup optimizer (AdamW)
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-    # Setup learning rate scheduler (cosine annealing from initial LR to 0)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+    # Setup learning rate scheduler
+    # Cosine annealing from initial LR (0.3) to 1e-5 over 300 epochs, then constant at 1e-5
+    cosine_epochs = 300
+    eta_min = 1e-5
+
+    cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=cosine_epochs,
+        eta_min=eta_min
+    )
+
+    # Constant scheduler after cosine annealing finishes
+    constant_scheduler = optim.lr_scheduler.ConstantLR(
+        optimizer,
+        factor=1.0,  # Keep LR constant
+        total_iters=args.epochs - cosine_epochs
+    )
+
+    # Chain the schedulers
+    scheduler = optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[cosine_scheduler, constant_scheduler],
+        milestones=[cosine_epochs]
+    )
 
     # Loss function (label smoothing)
     criterion = LabelSmoothingCrossEntropy(smoothing=0.1)
@@ -552,9 +576,11 @@ def main():
     epochs_evaluated = []
 
     # Training loop
-    print(f"\nStarting training for {args.epochs} epochs...")
+    print(f"\nStarting training for up to {args.epochs} epochs...")
+    print(f"Target clean train accuracy for early stopping: {args.target_train_acc:.2f}%")
     print("="*70)
 
+    final_epoch = args.epochs
     for epoch in range(1, args.epochs + 1):
         # Train
         train_loss, train_acc = train_one_epoch(
@@ -564,10 +590,12 @@ def main():
         # Step scheduler
         scheduler.step()
 
+        # Evaluate clean train accuracy every epoch for early stopping
+        train_acc_clean = evaluate_accuracy(model, eval_loader, device)
+
         # Evaluate MI and accuracy only at specified intervals
         if epoch % args.eval_interval == 0 or epoch == 1 or epoch == args.epochs:
-            # Evaluate accuracy on clean training set (eval mode, no augmentation)
-            train_acc_clean = evaluate_accuracy(model, eval_loader, device)
+            # Evaluate test accuracy
             test_acc = evaluate_accuracy(model, test_loader, device)
             gen_gap = train_acc_clean - test_acc
 
@@ -596,6 +624,13 @@ def main():
                 gen_gap_history.append(gen_gap)
                 epochs_evaluated.append(epoch)
 
+        # Check for early stopping
+        if train_acc_clean >= args.target_train_acc:
+            print(f"\n✓ Target clean train accuracy reached: {train_acc_clean:.4f}% >= {args.target_train_acc:.2f}%")
+            print(f"Stopping training at epoch {epoch}")
+            final_epoch = epoch
+            break
+
     print("\n" + "="*70)
     print("Training completed!")
 
@@ -619,7 +654,7 @@ def main():
     checkpoint_path = checkpoint_dir / f"{args.arch}_seed{args.seed}_final.pt"
 
     torch.save({
-        'epoch': args.epochs,
+        'epoch': final_epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'arch': args.arch,
@@ -678,6 +713,7 @@ def main():
             'use_augmentation': True,
             'use_dropout': True,
             'epochs': args.epochs,
+            'final_epoch': final_epoch,
             'final_train_acc_aug': float(train_acc),
             'final_train_acc_clean': float(train_acc_clean),
             'final_test_acc': float(test_acc),

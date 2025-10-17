@@ -78,10 +78,10 @@ else
     python3.9 -u train_vgg.py \
         --arch "$arch" \
         --seed $seed \
-        --epochs 200 \
+        --epochs 600 \
         --batch_size 256 \
-        --lr 0.001 \
-        --weight_decay 5e-4 \
+        --lr 0.3 \
+        --weight_decay 1e-5 \
         --eval_interval 10 \
         --n_masks_train 20 \
         --n_masks_final 40 \
