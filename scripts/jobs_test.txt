@@ -1,0 +1,6 @@
+vgg13 0
+vgg13 1
+vgg16 0
+vgg16 1
+vgg19 0
+vgg19 1
