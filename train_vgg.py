@@ -594,10 +594,10 @@ def main():
         nesterov=True
     )
 
-    # Setup learning rate scheduler: warmup (10) + cosine (290) + constant (300)
+    # Setup learning rate scheduler: warmup (10) + cosine (290)
+    # After epoch 300, LR stays constant at eta_min (we stop stepping the scheduler)
     warmup_epochs = 10
     cosine_epochs = 290
-    constant_epochs = 300
     eta_min = 1e-5
 
     # Warmup scheduler: linear increase from ~0 to args.lr over warmup_epochs
@@ -615,19 +615,15 @@ def main():
         eta_min=eta_min
     )
 
-    # Constant scheduler: stay at 1e-5 for remaining epochs
-    constant_scheduler = optim.lr_scheduler.ConstantLR(
-        optimizer,
-        factor=1.0,
-        total_iters=constant_epochs
-    )
-
-    # Chain the three schedulers
+    # Chain warmup + cosine schedulers
     scheduler = optim.lr_scheduler.SequentialLR(
         optimizer,
-        schedulers=[warmup_scheduler, cosine_scheduler, constant_scheduler],
-        milestones=[warmup_epochs, warmup_epochs + cosine_epochs]
+        schedulers=[warmup_scheduler, cosine_scheduler],
+        milestones=[warmup_epochs]
     )
+
+    # Track when scheduler should stop stepping (after warmup + cosine phases)
+    scheduler_end_epoch = warmup_epochs + cosine_epochs  # = 300
 
     # Loss function (label smoothing)
     criterion = LabelSmoothingCrossEntropy(smoothing=0.1)
@@ -653,8 +649,10 @@ def main():
             cutmix_alpha=1.0, grad_clip=args.grad_clip
         )
 
-        # Step scheduler
-        scheduler.step()
+        # Step scheduler only until it reaches eta_min at epoch 300
+        # After that, LR stays constant at eta_min (1e-5)
+        if epoch < scheduler_end_epoch:
+            scheduler.step()
 
         # Evaluate clean train accuracy every epoch for early stopping
         train_acc_clean = evaluate_accuracy(model, eval_loader, device)
