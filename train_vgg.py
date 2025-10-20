@@ -108,11 +108,8 @@ def get_data_loaders(
     # CIFAR-100 normalization
     normalize = transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 
-    # Train transform (with augmentation)
+    # Train transform (no augmentation for 99% train accuracy target)
     train_transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandAugment(num_ops=2, magnitude=9),
         transforms.ToTensor(),
         normalize,
     ])
@@ -575,11 +572,12 @@ def main():
         'vgg16': VGG16,
         'vgg19': VGG19
     }
-    model = model_map[args.arch](num_classes=100, use_batchnorm=True, use_dropout=True)
+    model = model_map[args.arch](num_classes=100, use_batchnorm=True, use_dropout=False)
     model = model.to(device)
 
     print(f"\nModel: {args.arch.upper()}")
-    print(f"Configuration: BN=yes, Aug=yes, Dropout=yes, Optimizer=SGD+Nesterov")
+    print(f"Configuration: BN=yes, Aug=no, Dropout=no, Optimizer=SGD+Nesterov")
+    print(f"Optimized for 99% train accuracy (no regularization besides BN and weight decay)")
     print(f"LR: {args.lr}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -656,18 +654,16 @@ def main():
     print("="*70)
 
     final_epoch = args.epochs
-    cutmix_disable_epoch = 400  # Disable CutMix after this epoch to allow better fitting
 
     for epoch in range(1, args.epochs + 1):
-        # Train with CutMix until epoch 400, then disable for final 200 epochs
-        current_cutmix_alpha = 1.0 if epoch <= cutmix_disable_epoch else 0.0
+        # Train without CutMix to allow 99% train accuracy
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer, device, epoch,
-            cutmix_alpha=current_cutmix_alpha, grad_clip=args.grad_clip
+            cutmix_alpha=0.0, grad_clip=args.grad_clip
         )
 
         # Step scheduler only until it reaches eta_min at epoch 300
-        # After that, LR stays constant at eta_min (1e-5)
+        # After that, LR stays constant at eta_min (5e-5)
         if epoch < scheduler_end_epoch:
             scheduler.step()
 
@@ -741,8 +737,8 @@ def main():
         'arch': args.arch,
         'seed': args.seed,
         'use_batchnorm': True,
-        'use_augmentation': True,
-        'use_dropout': True,
+        'use_augmentation': False,
+        'use_dropout': False,
         'optimizer_name': 'sgd_nesterov',
         'train_acc_aug': train_acc_aug_history[-1] if train_acc_aug_history else train_acc,
         'train_acc_clean': train_acc_clean_history[-1] if train_acc_clean_history else train_acc_clean,
@@ -776,8 +772,8 @@ def main():
         arch=args.arch,
         seed=args.seed,
         use_batchnorm=True,
-        use_augmentation=True,
-        use_dropout=True,
+        use_augmentation=False,
+        use_dropout=False,
         optimizer='sgd_nesterov',
     )
 
@@ -791,8 +787,8 @@ def main():
             'seed': args.seed,
             'optimizer': 'sgd_nesterov',
             'use_batchnorm': True,
-            'use_augmentation': True,
-            'use_dropout': True,
+            'use_augmentation': False,
+            'use_dropout': False,
             'epochs': args.epochs,
             'final_epoch': final_epoch,
             'final_train_acc_aug': float(train_acc),
