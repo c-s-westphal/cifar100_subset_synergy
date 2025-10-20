@@ -443,7 +443,10 @@ def train_one_epoch(
     cutmix_alpha: float = 1.0,
     grad_clip: float = 0.0
 ) -> Tuple[float, float]:
-    """Train for one epoch with CutMix."""
+    """Train for one epoch with optional CutMix.
+
+    If cutmix_alpha=0.0, CutMix is disabled and standard training is used.
+    """
     model.train()
     train_loss = 0
     correct = 0
@@ -452,14 +455,28 @@ def train_one_epoch(
     for batch_idx, (inputs, targets) in enumerate(train_loader):
         inputs, targets = inputs.to(device), targets.to(device)
 
-        # Apply CutMix augmentation
-        inputs, targets_a, targets_b, lam = cutmix_data(inputs, targets, cutmix_alpha)
-
         optimizer.zero_grad()
-        outputs = model(inputs)
 
-        # Mixed loss for CutMix
-        loss = lam * criterion(outputs, targets_a) + (1 - lam) * criterion(outputs, targets_b)
+        if cutmix_alpha > 0:
+            # Apply CutMix augmentation
+            inputs, targets_a, targets_b, lam = cutmix_data(inputs, targets, cutmix_alpha)
+            outputs = model(inputs)
+
+            # Mixed loss for CutMix
+            loss = lam * criterion(outputs, targets_a) + (1 - lam) * criterion(outputs, targets_b)
+
+            # Mixed accuracy for CutMix
+            _, predicted = outputs.max(1)
+            correct += (lam * predicted.eq(targets_a).sum().item() +
+                       (1 - lam) * predicted.eq(targets_b).sum().item())
+        else:
+            # Standard training without CutMix
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+
+            # Standard accuracy
+            _, predicted = outputs.max(1)
+            correct += predicted.eq(targets).sum().item()
 
         loss.backward()
 
@@ -470,10 +487,7 @@ def train_one_epoch(
         optimizer.step()
 
         train_loss += loss.item()
-        _, predicted = outputs.max(1)
         total += targets.size(0)
-        correct += (lam * predicted.eq(targets_a).sum().item() +
-                   (1 - lam) * predicted.eq(targets_b).sum().item())
 
     avg_loss = train_loss / len(train_loader)
     accuracy = 100. * correct / total
@@ -598,7 +612,7 @@ def main():
     # After epoch 300, LR stays constant at eta_min (we stop stepping the scheduler)
     warmup_epochs = 10
     cosine_epochs = 290
-    eta_min = 1e-5
+    eta_min = 5e-5  # Increased from 1e-5 to allow better fitting for 99% target
 
     # Warmup scheduler: linear increase from ~0 to args.lr over warmup_epochs
     warmup_scheduler = optim.lr_scheduler.LinearLR(
@@ -625,8 +639,8 @@ def main():
     # Track when scheduler should stop stepping (after warmup + cosine phases)
     scheduler_end_epoch = warmup_epochs + cosine_epochs  # = 300
 
-    # Loss function (label smoothing)
-    criterion = LabelSmoothingCrossEntropy(smoothing=0.1)
+    # Loss function (standard cross-entropy, no label smoothing for 99% train acc target)
+    criterion = nn.CrossEntropyLoss()
 
     # Tracking
     mi_history = []
@@ -642,11 +656,14 @@ def main():
     print("="*70)
 
     final_epoch = args.epochs
+    cutmix_disable_epoch = 400  # Disable CutMix after this epoch to allow better fitting
+
     for epoch in range(1, args.epochs + 1):
-        # Train
+        # Train with CutMix until epoch 400, then disable for final 200 epochs
+        current_cutmix_alpha = 1.0 if epoch <= cutmix_disable_epoch else 0.0
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer, device, epoch,
-            cutmix_alpha=1.0, grad_clip=args.grad_clip
+            cutmix_alpha=current_cutmix_alpha, grad_clip=args.grad_clip
         )
 
         # Step scheduler only until it reaches eta_min at epoch 300
