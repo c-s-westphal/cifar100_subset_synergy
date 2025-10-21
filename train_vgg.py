@@ -108,8 +108,9 @@ def get_data_loaders(
     # CIFAR-100 normalization
     normalize = transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 
-    # Train transform (no augmentation for 99% train accuracy target)
+    # Train transform (minimal augmentation: RandomHorizontalFlip only)
     train_transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         normalize,
     ])
@@ -576,8 +577,8 @@ def main():
     model = model.to(device)
 
     print(f"\nModel: {args.arch.upper()}")
-    print(f"Configuration: BN=yes, Aug=no, Dropout=no, Optimizer=SGD+Nesterov")
-    print(f"Optimized for 99% train accuracy (no regularization besides BN and weight decay)")
+    print(f"Configuration: BN=yes, Aug=minimal (HFlip only), Dropout=no, Optimizer=SGD+Nesterov")
+    print(f"Optimized for 99% train accuracy with minimal augmentation")
     print(f"LR: {args.lr}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
 
