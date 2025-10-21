@@ -108,8 +108,9 @@ def get_data_loaders(
     # CIFAR-100 normalization
     normalize = transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 
-    # Train transform (minimal augmentation: RandomHorizontalFlip only)
+    # Train transform (minimal augmentation: RandomCrop + RandomHorizontalFlip)
     train_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         normalize,
@@ -577,7 +578,7 @@ def main():
     model = model.to(device)
 
     print(f"\nModel: {args.arch.upper()}")
-    print(f"Configuration: BN=yes, Aug=minimal (HFlip only), Dropout=no, Optimizer=SGD+Nesterov")
+    print(f"Configuration: BN=yes, Aug=minimal (Crop+HFlip), Dropout=no, Optimizer=SGD+Nesterov")
     print(f"Optimized for 99% train accuracy with minimal augmentation")
     print(f"LR: {args.lr}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
@@ -607,10 +608,10 @@ def main():
         nesterov=True
     )
 
-    # Setup learning rate scheduler: warmup (10) + cosine (290)
-    # After epoch 300, LR stays constant at eta_min (we stop stepping the scheduler)
+    # Setup learning rate scheduler: warmup (10) + cosine (200)
+    # After epoch 210, LR stays constant at eta_min (we stop stepping the scheduler)
     warmup_epochs = 10
-    cosine_epochs = 290
+    cosine_epochs = 200
     eta_min = 5e-5  # Increased from 1e-5 to allow better fitting for 99% target
 
     # Warmup scheduler: linear increase from ~0 to args.lr over warmup_epochs
@@ -621,7 +622,7 @@ def main():
         total_iters=warmup_epochs
     )
 
-    # Cosine annealing scheduler: decay from args.lr to 1e-5 over 290 epochs
+    # Cosine annealing scheduler: decay from args.lr to eta_min over 200 epochs
     cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
         T_max=cosine_epochs,
@@ -636,7 +637,7 @@ def main():
     )
 
     # Track when scheduler should stop stepping (after warmup + cosine phases)
-    scheduler_end_epoch = warmup_epochs + cosine_epochs  # = 300
+    scheduler_end_epoch = warmup_epochs + cosine_epochs  # = 210
 
     # Loss function (standard cross-entropy, no label smoothing for 99% train acc target)
     criterion = nn.CrossEntropyLoss()
@@ -663,7 +664,7 @@ def main():
             cutmix_alpha=0.0, grad_clip=args.grad_clip
         )
 
-        # Step scheduler only until it reaches eta_min at epoch 300
+        # Step scheduler only until it reaches eta_min at epoch 210
         # After that, LR stays constant at eta_min (5e-5)
         if epoch < scheduler_end_epoch:
             scheduler.step()
