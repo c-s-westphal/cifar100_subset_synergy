@@ -514,10 +514,10 @@ def main():
                         help='Maximum number of training epochs')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='Training batch size')
-    parser.add_argument('--lr', type=float, default=0.2,
+    parser.add_argument('--lr', type=float, default=1e-3,
                         help='Initial learning rate (base LR)')
-    parser.add_argument('--weight_decay', type=float, default=1e-4,
-                        help='Weight decay (applied to conv/linear weights only)')
+    parser.add_argument('--weight_decay', type=float, default=1e-3,
+                        help='Weight decay (applied to all parameters with AdamW)')
     parser.add_argument('--target_train_acc', type=float, default=99.0,
                         help='Target clean train accuracy for early stopping')
     parser.add_argument('--grad_clip', type=float, default=1.0,
@@ -583,7 +583,7 @@ def main():
     model = model.to(device)
 
     print(f"\nModel: {args.arch.upper()}")
-    print(f"Configuration: BN=yes, Aug=minimal (Crop+HFlip), Dropout=no, Optimizer=SGD+Nesterov")
+    print(f"Configuration: BN=yes, Aug=minimal (Crop+HFlip), Dropout=no, Optimizer=AdamW")
     print(f"Optimized for 99% train accuracy with minimal augmentation")
     print(f"LR: {args.lr}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
@@ -602,32 +602,30 @@ def main():
         data_root=args.data_dir
     )
 
-    # Setup optimizer (SGD with Nesterov momentum and selective weight decay)
-    param_groups = separate_parameters_for_weight_decay(model)
-    param_groups[0]['weight_decay'] = args.weight_decay  # Apply WD to conv/linear weights
-
-    optimizer = optim.SGD(
-        param_groups,
+    # Setup optimizer (AdamW with decoupled weight decay)
+    optimizer = optim.AdamW(
+        model.parameters(),
         lr=args.lr,
-        momentum=0.9,
-        nesterov=True
+        weight_decay=args.weight_decay,
+        betas=(0.9, 0.999),
+        eps=1e-8
     )
 
-    # Setup learning rate scheduler: warmup (10) + cosine (100)
-    # After epoch 110, LR stays constant at eta_min (we stop stepping the scheduler)
+    # Setup learning rate scheduler: warmup (10) + cosine (490)
+    # Continuous decay over full 500 epochs, no constant LR phase
     warmup_epochs = 10
-    cosine_epochs = 100
-    eta_min = 2e-4  # Increased to 2e-4 for deeper models to converge fully
+    cosine_epochs = 490
+    eta_min = 1e-6  # Very low minimum LR for full convergence to 99%
 
-    # Warmup scheduler: linear increase from ~0 to args.lr over warmup_epochs
+    # Warmup scheduler: linear increase from 1e-6 to args.lr over warmup_epochs
     warmup_scheduler = optim.lr_scheduler.LinearLR(
         optimizer,
-        start_factor=0.001,  # Start at 0.1% of LR
-        end_factor=1.0,      # Reach full LR
+        start_factor=0.001,  # Start at 0.1% of base LR (1e-6)
+        end_factor=1.0,      # Reach full base LR (1e-3)
         total_iters=warmup_epochs
     )
 
-    # Cosine annealing scheduler: decay from args.lr to eta_min over 100 epochs
+    # Cosine annealing scheduler: decay from args.lr to eta_min over 490 epochs
     cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
         T_max=cosine_epochs,
@@ -641,8 +639,8 @@ def main():
         milestones=[warmup_epochs]
     )
 
-    # Track when scheduler should stop stepping (after warmup + cosine phases)
-    scheduler_end_epoch = warmup_epochs + cosine_epochs  # = 110
+    # Scheduler runs for full 500 epochs (no constant phase)
+    scheduler_end_epoch = warmup_epochs + cosine_epochs  # = 500
 
     # Loss function (standard cross-entropy, no label smoothing for 99% train acc target)
     criterion = nn.CrossEntropyLoss()
@@ -669,9 +667,9 @@ def main():
             cutmix_alpha=0.0, grad_clip=args.grad_clip
         )
 
-        # Step scheduler only until it reaches eta_min at epoch 110
-        # After that, LR stays constant at eta_min (2e-4)
-        if epoch < scheduler_end_epoch:
+        # Step scheduler for full 500 epochs (warmup + cosine decay to eta_min)
+        # LR decays continuously from 1e-3 to 1e-6, no constant phase
+        if epoch <= scheduler_end_epoch:
             scheduler.step()
 
         # Evaluate clean train accuracy every epoch for early stopping
@@ -746,7 +744,7 @@ def main():
         'use_batchnorm': True,
         'use_augmentation': False,
         'use_dropout': False,
-        'optimizer_name': 'sgd_nesterov',
+        'optimizer_name': 'adamw',
         'train_acc_aug': train_acc_aug_history[-1] if train_acc_aug_history else train_acc,
         'train_acc_clean': train_acc_clean_history[-1] if train_acc_clean_history else train_acc_clean,
         'test_acc': test_acc_history[-1] if test_acc_history else test_acc,
@@ -781,7 +779,7 @@ def main():
         use_batchnorm=True,
         use_augmentation=False,
         use_dropout=False,
-        optimizer='sgd_nesterov',
+        optimizer='adamw',
     )
 
     print(f"Results saved to: {results_path}")
