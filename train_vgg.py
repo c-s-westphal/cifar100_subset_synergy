@@ -511,7 +511,7 @@ def main():
                         help='Training batch size')
     parser.add_argument('--lr', type=float, default=0.2,
                         help='Initial learning rate (base LR)')
-    parser.add_argument('--weight_decay', type=float, default=3e-4,
+    parser.add_argument('--weight_decay', type=float, default=0.0,
                         help='Weight decay (applied to conv/linear weights only)')
     parser.add_argument('--target_train_acc', type=float, default=99.0,
                         help='Target clean train accuracy for early stopping')
@@ -608,11 +608,11 @@ def main():
         nesterov=True
     )
 
-    # Setup learning rate scheduler: warmup (10) + cosine (200)
-    # After epoch 210, LR stays constant at eta_min (we stop stepping the scheduler)
+    # Setup learning rate scheduler: warmup (10) + cosine (100)
+    # After epoch 110, LR stays constant at eta_min (we stop stepping the scheduler)
     warmup_epochs = 10
-    cosine_epochs = 200
-    eta_min = 5e-5  # Increased from 1e-5 to allow better fitting for 99% target
+    cosine_epochs = 100
+    eta_min = 2e-4  # Increased to 2e-4 for deeper models to converge fully
 
     # Warmup scheduler: linear increase from ~0 to args.lr over warmup_epochs
     warmup_scheduler = optim.lr_scheduler.LinearLR(
@@ -622,7 +622,7 @@ def main():
         total_iters=warmup_epochs
     )
 
-    # Cosine annealing scheduler: decay from args.lr to eta_min over 200 epochs
+    # Cosine annealing scheduler: decay from args.lr to eta_min over 100 epochs
     cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
         T_max=cosine_epochs,
@@ -637,7 +637,7 @@ def main():
     )
 
     # Track when scheduler should stop stepping (after warmup + cosine phases)
-    scheduler_end_epoch = warmup_epochs + cosine_epochs  # = 210
+    scheduler_end_epoch = warmup_epochs + cosine_epochs  # = 110
 
     # Loss function (standard cross-entropy, no label smoothing for 99% train acc target)
     criterion = nn.CrossEntropyLoss()
@@ -664,8 +664,8 @@ def main():
             cutmix_alpha=0.0, grad_clip=args.grad_clip
         )
 
-        # Step scheduler only until it reaches eta_min at epoch 210
-        # After that, LR stays constant at eta_min (5e-5)
+        # Step scheduler only until it reaches eta_min at epoch 110
+        # After that, LR stays constant at eta_min (2e-4)
         if epoch < scheduler_end_epoch:
             scheduler.step()
 
