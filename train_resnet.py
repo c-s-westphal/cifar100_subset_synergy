@@ -528,11 +528,11 @@ def main():
                         help='Evaluate MI every N epochs')
     parser.add_argument('--n_masks_train', type=int, default=20,
                         help='Number of masks for training MI evaluation')
-    parser.add_argument('--n_masks_final', type=int, default=40,
+    parser.add_argument('--n_masks_final', type=int, default=80,
                         help='Number of masks for final MI evaluation')
     parser.add_argument('--max_eval_batches_train', type=int, default=20,
                         help='Max batches for training MI evaluation')
-    parser.add_argument('--max_eval_batches_final', type=int, default=40,
+    parser.add_argument('--max_eval_batches_final', type=int, default=80,
                         help='Max batches for final MI evaluation')
 
     # System arguments

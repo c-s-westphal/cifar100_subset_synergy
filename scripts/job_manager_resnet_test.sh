@@ -84,9 +84,9 @@ else
         --weight_decay 1e-3 \
         --eval_interval 10 \
         --n_masks_train 20 \
-        --n_masks_final 40 \
+        --n_masks_final 80 \
         --max_eval_batches_train 20 \
-        --max_eval_batches_final 40 \
+        --max_eval_batches_final 80 \
         --checkpoint_dir checkpoints \
         --results_dir results \
         --data_dir ./data \
