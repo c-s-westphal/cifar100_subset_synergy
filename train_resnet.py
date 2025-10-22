@@ -261,6 +261,11 @@ def get_first_conv_block_output(model: nn.Module) -> nn.Module:
 
     Returns the ReLU module that follows the first conv (and possibly bn) block.
     """
+    # ResNet architecture: conv1 -> bn1 -> relu
+    if hasattr(model, 'conv1') and hasattr(model, 'relu'):
+        return model.relu
+
+    # VGG architecture: features sequential module
     if hasattr(model, 'features'):
         # Find the first Conv2d, then find the ReLU that follows it
         found_first_conv = False
