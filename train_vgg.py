@@ -511,7 +511,7 @@ def main():
                         help='Training batch size')
     parser.add_argument('--lr', type=float, default=0.2,
                         help='Initial learning rate (base LR)')
-    parser.add_argument('--weight_decay', type=float, default=0.0,
+    parser.add_argument('--weight_decay', type=float, default=1e-4,
                         help='Weight decay (applied to conv/linear weights only)')
     parser.add_argument('--target_train_acc', type=float, default=99.0,
                         help='Target clean train accuracy for early stopping')

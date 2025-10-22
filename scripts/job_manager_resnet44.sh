@@ -81,7 +81,7 @@ else
         --epochs 600 \
         --batch_size 256 \
         --lr 0.2 \
-        --weight_decay 0.0 \
+        --weight_decay 1e-4 \
         --eval_interval 10 \
         --n_masks_train 20 \
         --n_masks_final 40 \
