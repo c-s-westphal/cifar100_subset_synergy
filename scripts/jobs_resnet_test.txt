@@ -1,0 +1,6 @@
+resnet20 0
+resnet20 1
+resnet56 0
+resnet56 1
+resnet110 0
+resnet110 1
