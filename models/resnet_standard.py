@@ -139,6 +139,11 @@ def ResNet56(num_classes=100, use_batchnorm=True, use_dropout=False):
     return ResNet(BasicBlock, [9, 9, 9], num_classes, use_batchnorm, use_dropout)
 
 
+def ResNet74(num_classes=100, use_batchnorm=True, use_dropout=False):
+    """ResNet-74 for CIFAR (n=12, total layers = 6*12+2 = 74)"""
+    return ResNet(BasicBlock, [12, 12, 12], num_classes, use_batchnorm, use_dropout)
+
+
 def ResNet110(num_classes=100, use_batchnorm=True, use_dropout=False):
     """ResNet-110 for CIFAR (n=18, total layers = 6*18+2 = 110)"""
     return ResNet(BasicBlock, [18, 18, 18], num_classes, use_batchnorm, use_dropout)

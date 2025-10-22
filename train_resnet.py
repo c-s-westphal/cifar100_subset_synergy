@@ -19,7 +19,7 @@ from torchvision import datasets, transforms
 import numpy as np
 from sklearn.metrics import mutual_info_score
 
-from models.resnet_standard import ResNet20, ResNet32, ResNet44, ResNet56, ResNet110
+from models.resnet_standard import ResNet20, ResNet32, ResNet44, ResNet56, ResNet74, ResNet110
 
 
 def cutmix_data(x, y, alpha=1.0):
@@ -504,7 +504,7 @@ def main():
 
     # Model arguments
     parser.add_argument('--arch', type=str, required=True,
-                        choices=['resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110'],
+                        choices=['resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet74', 'resnet110'],
                         help='Model architecture')
     parser.add_argument('--seed', type=int, required=True,
                         help='Random seed')
@@ -577,6 +577,7 @@ def main():
         'resnet32': ResNet32,
         'resnet44': ResNet44,
         'resnet56': ResNet56,
+        'resnet74': ResNet74,
         'resnet110': ResNet110
     }
     model = model_map[args.arch](num_classes=100, use_batchnorm=True, use_dropout=False)
