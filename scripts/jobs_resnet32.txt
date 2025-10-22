@@ -1,0 +1,3 @@
+resnet32 0
+resnet32 1
+resnet32 2

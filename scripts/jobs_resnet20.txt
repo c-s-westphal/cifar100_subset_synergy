@@ -1,0 +1,3 @@
+resnet20 0
+resnet20 1
+resnet20 2

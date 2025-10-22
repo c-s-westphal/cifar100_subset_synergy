@@ -1,0 +1,3 @@
+resnet56 0
+resnet56 1
+resnet56 2
