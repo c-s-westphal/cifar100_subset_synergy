@@ -73,10 +73,18 @@ def load_final_results(results_dir: str, arch_family: str) -> Dict[str, List[dic
     all_results = {}
 
     architectures, _, _, _ = get_arch_config(arch_family)
-    seeds = [0, 1, 2]
+
+    # Configure seeds per architecture
+    # VGG9 uses 10 seeds (0-9), others use 3 seeds (0-2)
+    arch_seeds = {
+        'vgg9': list(range(10)),  # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    }
+    default_seeds = [0, 1, 2]
 
     for arch in architectures:
         all_results[arch] = []
+        seeds = arch_seeds.get(arch, default_seeds)
+
         for seed in seeds:
             json_file = results_path / f"{arch}_seed{seed}_results.json"
             if json_file.exists():
