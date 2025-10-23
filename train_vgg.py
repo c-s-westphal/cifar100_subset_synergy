@@ -108,11 +108,11 @@ def get_data_loaders(
     # CIFAR-100 normalization
     normalize = transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 
-    # Train transform (light augmentation: RandomCrop + RandomHorizontalFlip + RandAugment)
+    # Train transform (moderate augmentation: RandomCrop + RandomHorizontalFlip + RandAugment)
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
-        transforms.RandAugment(num_ops=2, magnitude=5),  # Light augmentation for VGG
+        transforms.RandAugment(num_ops=2, magnitude=9),  # Moderate augmentation for VGG
         transforms.ToTensor(),
         normalize,
     ])
@@ -657,10 +657,10 @@ def main():
     final_epoch = args.epochs
 
     for epoch in range(1, args.epochs + 1):
-        # Train without CutMix to allow 99% train accuracy
+        # Train with light CutMix
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer, device, epoch,
-            cutmix_alpha=0.0, grad_clip=args.grad_clip
+            cutmix_alpha=0.5, grad_clip=args.grad_clip
         )
 
         # Step scheduler for full 500 epochs (warmup + cosine decay to eta_min)

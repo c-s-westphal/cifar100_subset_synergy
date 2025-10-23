@@ -160,11 +160,11 @@ def plot_mi_vs_gengap(results: Dict[str, List[dict]], output_path: Path, arch_fa
 def main():
     """Generate MI vs Gen Gap visualization."""
     parser = argparse.ArgumentParser(description='Plot MI difference vs generalization gap')
-    parser.add_argument('--arch', type=str, required=True, choices=['vgg', 'resnet'],
+    parser.add_argument('--arch', type=str, default='vgg', choices=['vgg', 'resnet'],
                        help='Architecture family to plot (vgg or resnet)')
-    parser.add_argument('--results_dir', type=str, default='../results',
+    parser.add_argument('--results_dir', type=str, default='results',
                        help='Directory containing results files')
-    parser.add_argument('--output_dir', type=str, default='../plots',
+    parser.add_argument('--output_dir', type=str, default='plots',
                        help='Directory to save plots')
     args = parser.parse_args()
 
