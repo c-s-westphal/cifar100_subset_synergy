@@ -1,3 +1,10 @@
 vgg11 0
 vgg11 1
 vgg11 2
+vgg11 3
+vgg11 4
+vgg11 5
+vgg11 6
+vgg11 7
+vgg11 8
+vgg11 9
