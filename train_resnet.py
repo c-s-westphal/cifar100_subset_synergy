@@ -108,11 +108,11 @@ def get_data_loaders(
     # CIFAR-100 normalization
     normalize = transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 
-    # Train transform (moderate augmentation: RandomCrop + RandomHorizontalFlip + RandAugment)
+    # Train transform (light augmentation: RandomCrop + RandomHorizontalFlip + RandAugment)
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
-        transforms.RandAugment(num_ops=2, magnitude=9),  # Moderate augmentation for ResNet
+        transforms.RandAugment(num_ops=1, magnitude=5),  # Light augmentation for ResNet
         transforms.ToTensor(),
         normalize,
     ])
@@ -585,8 +585,8 @@ def main():
     model = model.to(device)
 
     print(f"\nModel: {args.arch.upper()}")
-    print(f"Configuration: BN=yes, Aug=moderate (Crop+HFlip+RandAug), Dropout=no, Optimizer=AdamW")
-    print(f"Target: 96-99% train accuracy with moderate augmentation for better generalization")
+    print(f"Configuration: BN=yes, Aug=light (Crop+HFlip+RandAug), Dropout=no, Optimizer=AdamW")
+    print(f"Target: 96-99% train accuracy with light augmentation for better generalization")
     print(f"LR: {args.lr}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -744,7 +744,7 @@ def main():
         'arch': args.arch,
         'seed': args.seed,
         'use_batchnorm': True,
-        'use_augmentation': True,  # RandAugment(num_ops=2, magnitude=9)
+        'use_augmentation': True,  # RandAugment(num_ops=1, magnitude=5)
         'use_dropout': False,
         'optimizer_name': 'adamw',
         'train_acc_aug': train_acc_aug_history[-1] if train_acc_aug_history else train_acc,
@@ -794,7 +794,7 @@ def main():
             'seed': args.seed,
             'optimizer': 'adamw',
             'use_batchnorm': True,
-            'use_augmentation': True,  # RandAugment(num_ops=2, magnitude=9)
+            'use_augmentation': True,  # RandAugment(num_ops=1, magnitude=5)
             'use_dropout': False,
             'epochs': args.epochs,
             'final_epoch': final_epoch,
