@@ -7,7 +7,7 @@
 #$ -S /bin/bash
 #$ -j y
 #$ -N resnet56_cifar100
-#$ -t 1-3
+#$ -t 1-10
 set -euo pipefail
 
 hostname

@@ -1,3 +1,10 @@
 resnet56 0
 resnet56 1
 resnet56 2
+resnet56 3
+resnet56 4
+resnet56 5
+resnet56 6
+resnet56 7
+resnet56 8
+resnet56 9

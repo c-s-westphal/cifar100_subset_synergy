@@ -1,3 +1,10 @@
 resnet44 0
 resnet44 1
 resnet44 2
+resnet44 3
+resnet44 4
+resnet44 5
+resnet44 6
+resnet44 7
+resnet44 8
+resnet44 9

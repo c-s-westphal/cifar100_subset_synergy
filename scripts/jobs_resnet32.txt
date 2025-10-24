@@ -1,3 +1,10 @@
 resnet32 0
 resnet32 1
 resnet32 2
+resnet32 3
+resnet32 4
+resnet32 5
+resnet32 6
+resnet32 7
+resnet32 8
+resnet32 9

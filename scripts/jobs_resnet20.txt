@@ -1,3 +1,10 @@
 resnet20 0
 resnet20 1
 resnet20 2
+resnet20 3
+resnet20 4
+resnet20 5
+resnet20 6
+resnet20 7
+resnet20 8
+resnet20 9

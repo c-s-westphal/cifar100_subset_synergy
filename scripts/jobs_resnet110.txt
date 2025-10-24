@@ -1,3 +1,10 @@
 resnet110 0
 resnet110 1
 resnet110 2
+resnet110 3
+resnet110 4
+resnet110 5
+resnet110 6
+resnet110 7
+resnet110 8
+resnet110 9
