@@ -1,7 +1,7 @@
 """
-Training script for ResNet models on CIFAR-10 with integrated MI evaluation.
+Training script for PreAct ResNet models on CIFAR-10 with integrated MI evaluation.
 
-Trains ResNet models (20, 32, 44, 56, 110) and evaluates
+Trains PreAct ResNet models (20, 32, 44, 56, 110) and evaluates
 the effect of masking after first skip connection on mutual information.
 """
 
@@ -19,7 +19,7 @@ from torchvision import datasets, transforms
 import numpy as np
 from sklearn.metrics import mutual_info_score
 
-from models.resnet_standard import ResNet20, ResNet32, ResNet44, ResNet56, ResNet74, ResNet110
+from models.preact_resnet import PreActResNet20, PreActResNet32, PreActResNet44, PreActResNet56, PreActResNet110
 
 
 def cutmix_data(x, y, alpha=1.0):
@@ -108,10 +108,12 @@ def get_data_loaders(
     # CIFAR-10 normalization
     normalize = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
-    # Train transform (standard augmentation: RandomCrop + RandomHorizontalFlip)
+    # Train transform with maximal augmentation for high training accuracy
+    # RandAugment with moderate settings + CutMix (applied during training loop)
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
+        transforms.RandAugment(num_ops=2, magnitude=9),
         transforms.ToTensor(),
         normalize,
     ])
@@ -260,8 +262,9 @@ def get_first_conv_block_output(model: nn.Module) -> nn.Module:
     """Get the output after the first skip connection.
 
     Returns the first residual block (layer1[0]) which contains the first skip connection.
+    Works with both standard ResNet and PreAct ResNet architectures.
     """
-    # ResNet architecture: mask after first skip connection in layer1[0]
+    # PreAct ResNet / ResNet architecture: mask after first skip connection in layer1[0]
     if hasattr(model, 'layer1'):
         return model.layer1[0]
 
@@ -504,7 +507,7 @@ def main():
 
     # Model arguments
     parser.add_argument('--arch', type=str, required=True,
-                        choices=['resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet74', 'resnet110'],
+                        choices=['resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110'],
                         help='Model architecture')
     parser.add_argument('--seed', type=int, required=True,
                         help='Random seed')
@@ -571,22 +574,21 @@ def main():
 
     print(f"Using device: {device}")
 
-    # Create model (single configuration: BN=yes, Aug=yes, Dropout=no)
+    # Create model (PreAct ResNet configuration)
     model_map = {
-        'resnet20': ResNet20,
-        'resnet32': ResNet32,
-        'resnet44': ResNet44,
-        'resnet56': ResNet56,
-        'resnet74': ResNet74,
-        'resnet110': ResNet110
+        'resnet20': PreActResNet20,
+        'resnet32': PreActResNet32,
+        'resnet44': PreActResNet44,
+        'resnet56': PreActResNet56,
+        'resnet110': PreActResNet110
     }
-    model = model_map[args.arch](num_classes=10, use_batchnorm=True, use_dropout=False)
+    model = model_map[args.arch](num_classes=10)
     model = model.to(device)
 
-    print(f"\nModel: {args.arch.upper()}")
-    print(f"Configuration: BN=yes, Aug=standard (Crop+HFlip), Dropout=no, Optimizer=AdamW")
-    print(f"Target: 99% train accuracy with standard augmentation")
-    print(f"LR: {args.lr}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}")
+    print(f"\nModel: PreAct {args.arch.upper()}")
+    print(f"Configuration: PreAct ResNet, Aug=maximal (Crop+HFlip+RandAugment+CutMix), Optimizer=AdamW")
+    print(f"Target: High train accuracy with maximal augmentation")
+    print(f"LR: {args.lr}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}, CutMix Alpha: 0.5")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Create data loaders
@@ -662,10 +664,10 @@ def main():
     final_epoch = args.epochs
 
     for epoch in range(1, args.epochs + 1):
-        # Train without CutMix to allow 99% train accuracy
+        # Train with moderate CutMix (alpha=0.5) for maximal augmentation
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer, device, epoch,
-            cutmix_alpha=0.0, grad_clip=args.grad_clip
+            cutmix_alpha=0.5, grad_clip=args.grad_clip
         )
 
         # Step scheduler for full 500 epochs (warmup + cosine decay to eta_min)
