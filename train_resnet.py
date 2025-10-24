@@ -1,5 +1,5 @@
 """
-Training script for ResNet models on CIFAR-100 with integrated MI evaluation.
+Training script for ResNet models on CIFAR-10 with integrated MI evaluation.
 
 Trains ResNet models (20, 32, 44, 56, 110) and evaluates
 the effect of masking after first skip connection on mutual information.
@@ -98,18 +98,20 @@ def get_data_loaders(
     num_workers: int = 4,
     data_root: str = './data'
 ) -> Tuple[DataLoader, DataLoader]:
-    """Create CIFAR-100 train and test data loaders.
+    """Create CIFAR-10 train and test data loaders with standard augmentation.
 
     Args:
         batch_size: Batch size for training and testing
         num_workers: Number of data loading workers
-        data_root: Root directory for CIFAR-100 data
+        data_root: Root directory for CIFAR-10 data
     """
-    # CIFAR-100 normalization
-    normalize = transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+    # CIFAR-10 normalization
+    normalize = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
-    # Train transform (no augmentation - only normalization)
+    # Train transform (standard augmentation: RandomCrop + RandomHorizontalFlip)
     train_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         normalize,
     ])
@@ -120,11 +122,11 @@ def get_data_loaders(
         normalize,
     ])
 
-    train_dataset = datasets.CIFAR100(
+    train_dataset = datasets.CIFAR10(
         root=data_root, train=True, download=True, transform=train_transform
     )
 
-    test_dataset = datasets.CIFAR100(
+    test_dataset = datasets.CIFAR10(
         root=data_root, train=False, download=True, transform=test_transform
     )
 
@@ -146,15 +148,15 @@ def get_eval_loader(
     num_workers: int = 4,
     data_root: str = './data'
 ) -> DataLoader:
-    """Create evaluation data loader (no augmentation, no shuffling)."""
-    normalize = transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+    """Create evaluation data loader (CIFAR-10, no augmentation, no shuffling)."""
+    normalize = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
     eval_transform = transforms.Compose([
         transforms.ToTensor(),
         normalize,
     ])
 
-    eval_dataset = datasets.CIFAR100(
+    eval_dataset = datasets.CIFAR10(
         root=data_root, train=True, download=True, transform=eval_transform
     )
 
@@ -339,7 +341,7 @@ def calculate_mutual_information(predictions: np.ndarray, labels: np.ndarray) ->
     """Calculate mutual information between predictions and true labels.
 
     Uses discrete mutual information: I(Y; predictions)
-    Maximum MI is log2(100) ≈ 6.64 bits for CIFAR-100.
+    Maximum MI is log2(10) ≈ 3.32 bits for CIFAR-10.
     """
     return mutual_info_score(labels, predictions)
 
@@ -498,7 +500,7 @@ def train_one_epoch(
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Train ResNet on CIFAR-100 with MI evaluation')
+    parser = argparse.ArgumentParser(description='Train ResNet on CIFAR-10 with MI evaluation')
 
     # Model arguments
     parser.add_argument('--arch', type=str, required=True,
@@ -539,7 +541,7 @@ def main():
     parser.add_argument('--device', type=str, default='cuda',
                         help='Device to use (cuda/cpu)')
     parser.add_argument('--data_dir', type=str, default='./data',
-                        help='Directory for CIFAR-100 data')
+                        help='Directory for CIFAR-10 data')
 
     # Output arguments
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints',
@@ -578,12 +580,12 @@ def main():
         'resnet74': ResNet74,
         'resnet110': ResNet110
     }
-    model = model_map[args.arch](num_classes=100, use_batchnorm=True, use_dropout=False)
+    model = model_map[args.arch](num_classes=10, use_batchnorm=True, use_dropout=False)
     model = model.to(device)
 
     print(f"\nModel: {args.arch.upper()}")
-    print(f"Configuration: BN=yes, Aug=none, Dropout=no, Optimizer=AdamW")
-    print(f"Target: 99% train accuracy with no augmentation")
+    print(f"Configuration: BN=yes, Aug=standard (Crop+HFlip), Dropout=no, Optimizer=AdamW")
+    print(f"Target: 99% train accuracy with standard augmentation")
     print(f"LR: {args.lr}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -741,7 +743,7 @@ def main():
         'arch': args.arch,
         'seed': args.seed,
         'use_batchnorm': True,
-        'use_augmentation': False,  # No augmentation
+        'use_augmentation': True,  # Standard (Crop+HFlip)
         'use_dropout': False,
         'optimizer_name': 'adamw',
         'train_acc_aug': train_acc_aug_history[-1] if train_acc_aug_history else train_acc,
@@ -776,7 +778,7 @@ def main():
         arch=args.arch,
         seed=args.seed,
         use_batchnorm=True,
-        use_augmentation=True,  # RandAugment(num_ops=2, magnitude=9)
+        use_augmentation=True,  # Standard (Crop+HFlip)
         use_dropout=False,
         optimizer='adamw',
     )
@@ -791,7 +793,7 @@ def main():
             'seed': args.seed,
             'optimizer': 'adamw',
             'use_batchnorm': True,
-            'use_augmentation': False,  # No augmentation
+            'use_augmentation': True,  # Standard (Crop+HFlip)
             'use_dropout': False,
             'epochs': args.epochs,
             'final_epoch': final_epoch,
