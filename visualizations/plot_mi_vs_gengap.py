@@ -75,11 +75,13 @@ def load_final_results(results_dir: str, arch_family: str) -> Dict[str, List[dic
     architectures, _, _, _ = get_arch_config(arch_family)
 
     # Configure seeds per architecture
-    # VGG9 uses 10 seeds (0-9), others use 3 seeds (0-2)
-    arch_seeds = {
-        'vgg9': list(range(10)),  # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    }
-    default_seeds = [0, 1, 2]
+    # All VGGs use 10 seeds (0-9), ResNets use 3 seeds (0-2)
+    if arch_family == 'vgg':
+        default_seeds = list(range(10))  # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    else:
+        default_seeds = [0, 1, 2]
+
+    arch_seeds = {}  # Can override specific architectures if needed
 
     for arch in architectures:
         all_results[arch] = []
