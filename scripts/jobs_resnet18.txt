@@ -1,0 +1,10 @@
+resnet18 0
+resnet18 1
+resnet18 2
+resnet18 3
+resnet18 4
+resnet18 5
+resnet18 6
+resnet18 7
+resnet18 8
+resnet18 9

@@ -52,7 +52,24 @@ def get_arch_config(arch_family: str) -> Tuple[List[str], Dict[str, str], Dict[s
             'resnet56': 'ResNet-56',
             'resnet110': 'ResNet-110'
         }
-        family_name = 'ResNet'
+        family_name = 'ResNet (CIFAR)'
+    elif arch_family == 'resnet_img':
+        architectures = ['resnet10', 'resnet18', 'resnet34', 'resnet50', 'resnet68']
+        colors = {
+            'resnet10': '#1f77b4',
+            'resnet18': '#ff7f0e',
+            'resnet34': '#2ca02c',
+            'resnet50': '#d62728',
+            'resnet68': '#9467bd'
+        }
+        labels = {
+            'resnet10': 'ResNet-10',
+            'resnet18': 'ResNet-18',
+            'resnet34': 'ResNet-34',
+            'resnet50': 'ResNet-50',
+            'resnet68': 'ResNet-68'
+        }
+        family_name = 'ResNet (ImageNet-style)'
     else:
         raise ValueError(f"Unknown architecture family: {arch_family}")
 
@@ -166,8 +183,8 @@ def plot_mi_vs_gengap(results: Dict[str, List[dict]], output_path: Path, arch_fa
 def main():
     """Generate MI vs Gen Gap visualization."""
     parser = argparse.ArgumentParser(description='Plot MI difference vs generalization gap')
-    parser.add_argument('--arch', type=str, default='vgg', choices=['vgg', 'resnet'],
-                       help='Architecture family to plot (vgg or resnet)')
+    parser.add_argument('--arch', type=str, default='vgg', choices=['vgg', 'resnet', 'resnet_img'],
+                       help='Architecture family to plot (vgg, resnet, or resnet_img)')
     parser.add_argument('--results_dir', type=str, default='results',
                        help='Directory containing results files')
     parser.add_argument('--output_dir', type=str, default='plots',
