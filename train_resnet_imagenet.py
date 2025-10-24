@@ -2,7 +2,7 @@
 Training script for ImageNet-style ResNet models on CIFAR-100 with integrated MI evaluation.
 
 Trains ImageNet-style ResNet models (10, 18, 34, 50, 68) adapted for CIFAR-100 and evaluates
-the effect of first-layer masking on mutual information.
+the effect of masking after first skip connection on mutual information.
 
 Uses identical hyperparameters and data augmentation as VGG training:
 - RandAugment(num_ops=2, magnitude=9) + CutMix(alpha=0.5)
@@ -263,13 +263,13 @@ class ChannelMaskingHook:
 
 
 def get_first_conv_block_output(model: nn.Module) -> nn.Module:
-    """Get the ReLU module after first conv block (Conv->BN->ReLU or Conv->ReLU).
+    """Get the output after the first skip connection.
 
-    Returns the ReLU module that follows the first conv (and possibly bn) block.
+    Returns the first residual block (layer1[0]) which contains the first skip connection.
     """
-    # ResNet architecture: conv1 -> bn1 -> relu
-    if hasattr(model, 'conv1') and hasattr(model, 'relu'):
-        return model.relu
+    # ResNet architecture: mask after first skip connection in layer1[0]
+    if hasattr(model, 'layer1'):
+        return model.layer1[0]
 
     # VGG architecture: features sequential module
     if hasattr(model, 'features'):
@@ -360,14 +360,14 @@ def evaluate_first_layer_mi(
     seed: int = 42,
     max_batches: int = 0
 ) -> Tuple[float, float, float]:
-    """Evaluate MI difference between full and masked first conv layer.
+    """Evaluate MI difference between full and masked activations after first skip connection.
 
     Returns:
         (mi_full, mean_mi_masked, mi_difference)
     """
     model.eval()
 
-    # Get the ReLU after first conv block
+    # Get the output after first skip connection (layer1[0])
     first_block_output = get_first_conv_block_output(model)
 
     # Determine first layer dimensions
