@@ -1,0 +1,10 @@
+resnet80 0
+resnet80 1
+resnet80 2
+resnet80 3
+resnet80 4
+resnet80 5
+resnet80 6
+resnet80 7
+resnet80 8
+resnet80 9

@@ -1,0 +1,10 @@
+resnet92 0
+resnet92 1
+resnet92 2
+resnet92 3
+resnet92 4
+resnet92 5
+resnet92 6
+resnet92 7
+resnet92 8
+resnet92 9

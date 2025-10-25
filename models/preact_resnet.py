@@ -1,7 +1,7 @@
 """
 PreAct ResNet architectures for CIFAR-10.
 
-Implements PreAct ResNet-20, 32, 44, 56, 110 following "Identity Mappings in Deep
+Implements PreAct ResNet-20, 32, 44, 56, 68, 80, 92, 110 following "Identity Mappings in Deep
 Residual Networks" (He et al., 2016). Uses pre-activation: BN->ReLU->Conv instead
 of Conv->BN->ReLU for better gradient flow.
 
@@ -133,6 +133,21 @@ def PreActResNet56(num_classes=10):
     return PreActResNet(PreActBlock, [9, 9, 9], num_classes)
 
 
+def PreActResNet68(num_classes=10):
+    """PreAct ResNet-68 for CIFAR (n=11, total layers = 6*11+2 = 68)"""
+    return PreActResNet(PreActBlock, [11, 11, 11], num_classes)
+
+
+def PreActResNet80(num_classes=10):
+    """PreAct ResNet-80 for CIFAR (n=13, total layers = 6*13+2 = 80)"""
+    return PreActResNet(PreActBlock, [13, 13, 13], num_classes)
+
+
+def PreActResNet92(num_classes=10):
+    """PreAct ResNet-92 for CIFAR (n=15, total layers = 6*15+2 = 92)"""
+    return PreActResNet(PreActBlock, [15, 15, 15], num_classes)
+
+
 def PreActResNet110(num_classes=10):
     """PreAct ResNet-110 for CIFAR (n=18, total layers = 6*18+2 = 110)"""
     return PreActResNet(PreActBlock, [18, 18, 18], num_classes)
@@ -144,6 +159,9 @@ if __name__ == '__main__':
                             ('PreActResNet32', PreActResNet32),
                             ('PreActResNet44', PreActResNet44),
                             ('PreActResNet56', PreActResNet56),
+                            ('PreActResNet68', PreActResNet68),
+                            ('PreActResNet80', PreActResNet80),
+                            ('PreActResNet92', PreActResNet92),
                             ('PreActResNet110', PreActResNet110)]:
         print(f"\n{name}:")
         model = model_fn(num_classes=10)

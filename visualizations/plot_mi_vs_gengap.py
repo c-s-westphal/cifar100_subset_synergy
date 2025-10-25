@@ -37,19 +37,25 @@ def get_arch_config(arch_family: str) -> Tuple[List[str], Dict[str, str], Dict[s
         }
         family_name = 'VGG'
     elif arch_family == 'resnet':
-        architectures = ['resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110']
+        architectures = ['resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet68', 'resnet80', 'resnet92', 'resnet110']
         colors = {
             'resnet20': '#1f77b4',
             'resnet32': '#ff7f0e',
             'resnet44': '#2ca02c',
             'resnet56': '#d62728',
-            'resnet110': '#9467bd'
+            'resnet68': '#9467bd',
+            'resnet80': '#8c564b',
+            'resnet92': '#e377c2',
+            'resnet110': '#7f7f7f'
         }
         labels = {
             'resnet20': 'ResNet-20',
             'resnet32': 'ResNet-32',
             'resnet44': 'ResNet-44',
             'resnet56': 'ResNet-56',
+            'resnet68': 'ResNet-68',
+            'resnet80': 'ResNet-80',
+            'resnet92': 'ResNet-92',
             'resnet110': 'ResNet-110'
         }
         family_name = 'ResNet (CIFAR)'
@@ -76,12 +82,13 @@ def get_arch_config(arch_family: str) -> Tuple[List[str], Dict[str, str], Dict[s
     return architectures, colors, labels, family_name
 
 
-def load_final_results(results_dir: str, arch_family: str) -> Dict[str, List[dict]]:
+def load_final_results(results_dir: str, arch_family: str, train_acc_threshold: float = 0.0) -> Dict[str, List[dict]]:
     """Load final results organized by architecture.
 
     Args:
         results_dir: Path to results directory
         arch_family: Architecture family ('vgg' or 'resnet')
+        train_acc_threshold: Minimum train accuracy threshold (default: 0.0)
 
     Returns:
         Dict mapping arch -> list of result dicts (one per seed)
@@ -105,13 +112,15 @@ def load_final_results(results_dir: str, arch_family: str) -> Dict[str, List[dic
             if json_file.exists():
                 with open(json_file, 'r') as f:
                     data = json.load(f)
-                    all_results[arch].append({
-                        'seed': seed,
-                        'gen_gap': data['final_gen_gap'],
-                        'mi_diff': data['final_mi_diff'],
-                        'test_acc': data['final_test_acc'],
-                        'train_acc': data['final_train_acc_clean']
-                    })
+                    # Filter by train accuracy threshold
+                    if data['final_train_acc_clean'] >= train_acc_threshold:
+                        all_results[arch].append({
+                            'seed': seed,
+                            'gen_gap': data['final_gen_gap'],
+                            'mi_diff': data['final_mi_diff'],
+                            'test_acc': data['final_test_acc'],
+                            'train_acc': data['final_train_acc_clean']
+                        })
             else:
                 print(f"Warning: {json_file} not found")
 
@@ -189,10 +198,14 @@ def main():
                        help='Directory containing results files')
     parser.add_argument('--output_dir', type=str, default='plots',
                        help='Directory to save plots')
+    parser.add_argument('--train_acc_threshold', type=float, default=0.0,
+                       help='Minimum train accuracy threshold for filtering (default: 0.0)')
     args = parser.parse_args()
 
     print(f"Loading {args.arch.upper()} results...")
-    results = load_final_results(args.results_dir, args.arch)
+    if args.train_acc_threshold > 0:
+        print(f"Filtering for train_acc >= {args.train_acc_threshold}%")
+    results = load_final_results(args.results_dir, args.arch, args.train_acc_threshold)
 
     # Create plots directory
     plots_dir = Path(args.output_dir)
