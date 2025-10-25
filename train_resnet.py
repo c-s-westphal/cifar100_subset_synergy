@@ -2,7 +2,7 @@
 Training script for PreAct ResNet models on CIFAR-10 with integrated MI evaluation.
 
 Trains PreAct ResNet models (20, 32, 44, 56, 110) and evaluates
-the effect of masking after first skip connection on mutual information.
+the effect of masking after first convolutional layer on mutual information.
 """
 
 import os
@@ -259,14 +259,14 @@ class ChannelMaskingHook:
 
 
 def get_first_conv_block_output(model: nn.Module) -> nn.Module:
-    """Get the output after the first skip connection.
+    """Get the first convolutional layer for masking.
 
-    Returns the first residual block (layer1[0]) which contains the first skip connection.
-    Works with both standard ResNet and PreAct ResNet architectures.
+    Returns the first conv layer (conv1) before any normalization, activation, or skip connections.
+    Works with both PreAct ResNet and standard ResNet architectures.
     """
-    # PreAct ResNet / ResNet architecture: mask after first skip connection in layer1[0]
-    if hasattr(model, 'layer1'):
-        return model.layer1[0]
+    # PreAct ResNet / ResNet architecture: mask after first conv (conv1)
+    if hasattr(model, 'conv1'):
+        return model.conv1
 
     # VGG architecture: features sequential module
     if hasattr(model, 'features'):
@@ -357,14 +357,14 @@ def evaluate_first_layer_mi(
     seed: int = 42,
     max_batches: int = 0
 ) -> Tuple[float, float, float]:
-    """Evaluate MI difference between full and masked activations after first skip connection.
+    """Evaluate MI difference between full and masked activations after first conv layer.
 
     Returns:
         (mi_full, mean_mi_masked, mi_difference)
     """
     model.eval()
 
-    # Get the output after first skip connection (layer1[0])
+    # Get the first convolutional layer (conv1)
     first_block_output = get_first_conv_block_output(model)
 
     # Determine first layer dimensions
