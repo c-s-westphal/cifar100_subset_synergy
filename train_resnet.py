@@ -1,7 +1,7 @@
 """
-Training script for PreAct ResNet models on CIFAR-10 with integrated MI evaluation.
+Training script for standard ResNet models on CIFAR-10 with integrated MI evaluation.
 
-Trains PreAct ResNet models (20, 32, 44, 56, 110) and evaluates
+Trains standard ResNet models (20, 32, 44, 56, 68, 80, 92, 110) and evaluates
 the effect of masking after first convolutional layer on mutual information.
 """
 
@@ -19,7 +19,7 @@ from torchvision import datasets, transforms
 import numpy as np
 from sklearn.metrics import mutual_info_score
 
-from models.preact_resnet import PreActResNet20, PreActResNet32, PreActResNet44, PreActResNet56, PreActResNet68, PreActResNet80, PreActResNet92, PreActResNet110
+from models.resnet_standard import ResNet20, ResNet32, ResNet44, ResNet56, ResNet68, ResNet80, ResNet92, ResNet110
 
 
 def cutmix_data(x, y, alpha=1.0):
@@ -108,10 +108,11 @@ def get_data_loaders(
     # CIFAR-10 normalization
     normalize = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
-    # Train transform with standard augmentation only
+    # Train transform with standard augmentation + RandAugment
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
+        transforms.RandAugment(num_ops=2, magnitude=9),
         transforms.ToTensor(),
         normalize,
     ])
@@ -260,9 +261,9 @@ def get_first_conv_block_output(model: nn.Module) -> nn.Module:
     """Get the first convolutional layer for masking.
 
     Returns the first conv layer (conv1) before any normalization, activation, or skip connections.
-    Works with both PreAct ResNet and standard ResNet architectures.
+    Works with standard ResNet architectures.
     """
-    # PreAct ResNet / ResNet architecture: mask after first conv (conv1)
+    # Standard ResNet architecture: mask after first conv (conv1)
     if hasattr(model, 'conv1'):
         return model.conv1
 
@@ -511,14 +512,18 @@ def main():
                         help='Random seed')
 
     # Training arguments
-    parser.add_argument('--epochs', type=int, default=600,
-                        help='Maximum number of training epochs')
+    parser.add_argument('--epochs', type=int, default=201,
+                        help='Initial number of training epochs (extends to 500 if target not reached)')
+    parser.add_argument('--max_epochs', type=int, default=500,
+                        help='Maximum number of training epochs if target accuracy not reached')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='Training batch size')
-    parser.add_argument('--lr', type=float, default=1e-3,
-                        help='Initial learning rate (base LR)')
-    parser.add_argument('--weight_decay', type=float, default=1e-3,
-                        help='Weight decay (applied to all parameters with AdamW)')
+    parser.add_argument('--lr', type=float, default=0.1,
+                        help='Initial learning rate')
+    parser.add_argument('--weight_decay', type=float, default=1e-4,
+                        help='Weight decay for SGD optimizer')
+    parser.add_argument('--momentum', type=float, default=0.9,
+                        help='SGD momentum')
     parser.add_argument('--target_train_acc', type=float, default=99.0,
                         help='Target clean train accuracy for early stopping')
     parser.add_argument('--grad_clip', type=float, default=1.0,
@@ -572,24 +577,25 @@ def main():
 
     print(f"Using device: {device}")
 
-    # Create model (PreAct ResNet configuration)
+    # Create model (Standard ResNet configuration)
     model_map = {
-        'resnet20': PreActResNet20,
-        'resnet32': PreActResNet32,
-        'resnet44': PreActResNet44,
-        'resnet56': PreActResNet56,
-        'resnet68': PreActResNet68,
-        'resnet80': PreActResNet80,
-        'resnet92': PreActResNet92,
-        'resnet110': PreActResNet110
+        'resnet20': ResNet20,
+        'resnet32': ResNet32,
+        'resnet44': ResNet44,
+        'resnet56': ResNet56,
+        'resnet68': ResNet68,
+        'resnet80': ResNet80,
+        'resnet92': ResNet92,
+        'resnet110': ResNet110
     }
-    model = model_map[args.arch](num_classes=10)
+    model = model_map[args.arch](num_classes=10, use_batchnorm=True, use_dropout=False)
     model = model.to(device)
 
-    print(f"\nModel: PreAct {args.arch.upper()}")
-    print(f"Configuration: PreAct ResNet, Aug=standard (Crop+HFlip), Optimizer=AdamW")
-    print(f"Target: High train accuracy with standard augmentation")
-    print(f"LR: {args.lr}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}")
+    print(f"\nModel: Standard {args.arch.upper()}")
+    print(f"Configuration: Standard ResNet (2015), Aug=Crop+HFlip+RandAugment, Optimizer=SGD")
+    print(f"Target: Train accuracy >= {args.target_train_acc}% on CIFAR-10")
+    print(f"LR: {args.lr}, Momentum: {args.momentum}, Weight Decay: {args.weight_decay}, Grad Clip: {args.grad_clip}")
+    print(f"LR Schedule: Multiply by 0.1 at epochs 100, 150, 200")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Create data loaders
@@ -606,45 +612,22 @@ def main():
         data_root=args.data_dir
     )
 
-    # Setup optimizer (AdamW with decoupled weight decay)
-    optimizer = optim.AdamW(
+    # Setup optimizer (SGD with momentum)
+    optimizer = optim.SGD(
         model.parameters(),
         lr=args.lr,
+        momentum=args.momentum,
         weight_decay=args.weight_decay,
-        betas=(0.9, 0.999),
-        eps=1e-8
+        nesterov=True
     )
 
-    # Setup learning rate scheduler: warmup (10) + cosine (490)
-    # Continuous decay over full 500 epochs, no constant LR phase
-    warmup_epochs = 10
-    cosine_epochs = 490
-    eta_min = 1e-6  # Very low minimum LR for full convergence to 99%
-
-    # Warmup scheduler: linear increase from 1e-6 to args.lr over warmup_epochs
-    warmup_scheduler = optim.lr_scheduler.LinearLR(
+    # Setup learning rate scheduler: MultiStepLR
+    # Decay by 0.1 at epochs 100, 150, 200
+    scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer,
-        start_factor=0.001,  # Start at 0.1% of base LR (1e-6)
-        end_factor=1.0,      # Reach full base LR (1e-3)
-        total_iters=warmup_epochs
+        milestones=[100, 150, 200],
+        gamma=0.1
     )
-
-    # Cosine annealing scheduler: decay from args.lr to eta_min over 490 epochs
-    cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer,
-        T_max=cosine_epochs,
-        eta_min=eta_min
-    )
-
-    # Chain warmup + cosine schedulers
-    scheduler = optim.lr_scheduler.SequentialLR(
-        optimizer,
-        schedulers=[warmup_scheduler, cosine_scheduler],
-        milestones=[warmup_epochs]
-    )
-
-    # Scheduler runs for full 500 epochs (no constant phase)
-    scheduler_end_epoch = warmup_epochs + cosine_epochs  # = 500
 
     # Loss function (standard cross-entropy, no label smoothing for 99% train acc target)
     criterion = nn.CrossEntropyLoss()
@@ -658,23 +641,24 @@ def main():
     epochs_evaluated = []
 
     # Training loop
-    print(f"\nStarting training for up to {args.epochs} epochs...")
-    print(f"Target clean train accuracy for early stopping: {args.target_train_acc:.2f}%")
+    print(f"\nStarting training...")
+    print(f"Initial training: {args.epochs} epochs")
+    print(f"Extended training: up to {args.max_epochs} epochs if train acc < {args.target_train_acc:.2f}%")
+    print(f"Target clean train accuracy: {args.target_train_acc:.2f}%")
     print("="*70)
 
     final_epoch = args.epochs
+    extended_training = False
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(1, args.max_epochs + 1):
         # Train with standard augmentation (no CutMix)
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer, device, epoch,
             cutmix_alpha=0.0, grad_clip=args.grad_clip
         )
 
-        # Step scheduler for full 500 epochs (warmup + cosine decay to eta_min)
-        # LR decays continuously from 1e-3 to 1e-6, no constant phase
-        if epoch <= scheduler_end_epoch:
-            scheduler.step()
+        # Step scheduler after each epoch
+        scheduler.step()
 
         # Evaluate clean train accuracy every epoch for early stopping
         train_acc_clean = evaluate_accuracy(model, eval_loader, device)
@@ -710,15 +694,37 @@ def main():
                 gen_gap_history.append(gen_gap)
                 epochs_evaluated.append(epoch)
 
-        # Check for early stopping
-        if train_acc_clean >= args.target_train_acc:
+        # Check for early stopping or extension at epoch 201
+        if epoch == args.epochs:
+            if train_acc_clean >= args.target_train_acc:
+                print(f"\n✓ Target clean train accuracy reached: {train_acc_clean:.4f}% >= {args.target_train_acc:.2f}%")
+                print(f"Stopping training at epoch {epoch}")
+                final_epoch = epoch
+                break
+            else:
+                print(f"\n⚠ Train accuracy {train_acc_clean:.4f}% < {args.target_train_acc:.2f}% at epoch {epoch}")
+                print(f"Extending training to {args.max_epochs} epochs...")
+                extended_training = True
+
+        # Check for early stopping during extended training
+        if epoch > args.epochs and train_acc_clean >= args.target_train_acc:
             print(f"\n✓ Target clean train accuracy reached: {train_acc_clean:.4f}% >= {args.target_train_acc:.2f}%")
             print(f"Stopping training at epoch {epoch}")
             final_epoch = epoch
             break
 
+    # Set final epoch if we completed all epochs without early stopping
+    if epoch == args.max_epochs and train_acc_clean < args.target_train_acc:
+        final_epoch = args.max_epochs
+        print(f"\n⚠ Reached maximum epochs ({args.max_epochs}) without achieving target accuracy")
+        print(f"Final train accuracy: {train_acc_clean:.4f}%")
+
     print("\n" + "="*70)
     print("Training completed!")
+    if extended_training:
+        print(f"Total epochs: {final_epoch} (extended from {args.epochs})")
+    else:
+        print(f"Total epochs: {final_epoch}")
 
     # Final MI evaluation with more masks and batches
     print(f"\nFinal MI evaluation (n_masks={args.n_masks_final}, max_batches={args.max_eval_batches_final})...")

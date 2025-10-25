@@ -78,10 +78,13 @@ else
     python3.9 -u train_resnet_imagenet.py \
         --arch "$arch" \
         --seed $seed \
-        --epochs 600 \
+        --epochs 201 \
+        --max_epochs 500 \
         --batch_size 256 \
-        --lr 1e-3 \
-        --weight_decay 1e-3 \
+        --lr 0.1 \
+        --momentum 0.9 \
+        --weight_decay 1e-4 \
+        --target_train_acc 99.0 \
         --eval_interval 10 \
         --n_masks_train 20 \
         --n_masks_final 80 \

@@ -1,7 +1,7 @@
 """
 Standard ResNet architectures for CIFAR-100.
 
-Implements ResNet-20, 32, 44, 56, 110 following the CIFAR ResNet design:
+Implements ResNet-20, 32, 44, 56, 68, 74, 80, 92, 110 following the CIFAR ResNet design:
 - 3 stages with [16, 32, 64] filters
 - BasicBlock with skip connections
 - No MaxPooling (uses stride-2 convolutions for downsampling)
@@ -139,9 +139,24 @@ def ResNet56(num_classes=100, use_batchnorm=True, use_dropout=False):
     return ResNet(BasicBlock, [9, 9, 9], num_classes, use_batchnorm, use_dropout)
 
 
+def ResNet68(num_classes=100, use_batchnorm=True, use_dropout=False):
+    """ResNet-68 for CIFAR (n=11, total layers = 6*11+2 = 68)"""
+    return ResNet(BasicBlock, [11, 11, 11], num_classes, use_batchnorm, use_dropout)
+
+
 def ResNet74(num_classes=100, use_batchnorm=True, use_dropout=False):
     """ResNet-74 for CIFAR (n=12, total layers = 6*12+2 = 74)"""
     return ResNet(BasicBlock, [12, 12, 12], num_classes, use_batchnorm, use_dropout)
+
+
+def ResNet80(num_classes=100, use_batchnorm=True, use_dropout=False):
+    """ResNet-80 for CIFAR (n=13, total layers = 6*13+2 = 80)"""
+    return ResNet(BasicBlock, [13, 13, 13], num_classes, use_batchnorm, use_dropout)
+
+
+def ResNet92(num_classes=100, use_batchnorm=True, use_dropout=False):
+    """ResNet-92 for CIFAR (n=15, total layers = 6*15+2 = 92)"""
+    return ResNet(BasicBlock, [15, 15, 15], num_classes, use_batchnorm, use_dropout)
 
 
 def ResNet110(num_classes=100, use_batchnorm=True, use_dropout=False):
